@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0A0E12"/>
+      <stop offset="100%" stop-color="#1E293B"/>
+    </linearGradient>
+    <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24"/>
+      <stop offset="100%" stop-color="#D97706"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background Squircle -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  
+  <!-- Outer Ring / Glow -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="url(#emeraldGrad)" stroke-width="4" opacity="0.3"/>
+  <circle cx="256" cy="256" r="195" fill="url(#emeraldGrad)"/>
+
+  <!-- Cash Register Outline -->
+  <!-- Top Screen -->
+  <rect x="156" y="140" width="200" height="90" rx="14" fill="#FFFFFF"/>
+  <rect x="170" y="152" width="172" height="66" rx="8" fill="#0A0E12"/>
+  <text x="256" y="195" fill="#10B981" font-family="'Outfit', sans-serif" font-weight="900" font-size="30" text-anchor="middle">CAISSE PRO</text>
+
+  <!-- Receipt Roll Paper -->
+  <path d="M290 140 L290 100 Q310 115 330 100 L330 140 Z" fill="#F8FAFC"/>
+  <line x1="298" y1="112" x2="322" y2="112" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+  <line x1="298" y1="122" x2="318" y2="122" stroke="#CBD5E1" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Main Register Body -->
+  <path d="M136 230 L376 230 L400 340 L112 340 Z" fill="#FFFFFF"/>
+  
+  <!-- Keypad Area -->
+  <g fill="#1E293B">
+    <rect x="146" y="246" width="36" height="24" rx="4"/>
+    <rect x="190" y="246" width="36" height="24" rx="4"/>
+    <rect x="234" y="246" width="36" height="24" rx="4"/>
+    <rect x="146" y="278" width="36" height="24" rx="4"/>
+    <rect x="190" y="278" width="36" height="24" rx="4"/>
+    <rect x="234" y="278" width="36" height="24" rx="4"/>
+    <rect x="146" y="308" width="80" height="22" rx="4" fill="#10B981"/>
+    <rect x="234" y="308" width="36" height="22" rx="4"/>
+  </g>
+
+  <!-- Scanner / Card Slot -->
+  <rect x="290" y="246" width="88" height="84" rx="8" fill="#0F172A"/>
+  <circle cx="334" cy="288" r="22" fill="url(#goldGrad)"/>
+  <text x="334" y="296" fill="#FFFFFF" font-family="'Outfit', sans-serif" font-weight="900" font-size="20" text-anchor="middle">F</text>
+
+  <!-- Bottom Drawer -->
+  <rect x="104" y="340" width="304" height="60" rx="10" fill="#E2E8F0"/>
+  <rect x="120" y="352" width="272" height="36" rx="6" fill="#0F172A"/>
+  <!-- Keyhole / Gold lock -->
+  <circle cx="256" cy="370" r="7" fill="url(#goldGrad)"/>
+  <rect x="254" y="370" width="4" height="8" fill="url(#goldGrad)"/>
+</svg>

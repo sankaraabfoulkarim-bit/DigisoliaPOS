@@ -12,10 +12,11 @@
 <title>Caisse SaaS Pro</title>
 
 <!-- PWA -->
-<link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-192.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" type="image/svg+xml" href="/icon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
 
 <!-- Firebase SDK -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-app-compat.min.js"></script>
@@ -944,6 +945,9 @@ function SectionPromos({ T, shopId }) {
   </div>);
 }
 
+// Alias pour compatibilité
+const SectionPromo = SectionPromos;
+
 // ══════════════════════════════════════════════════════════════════
 //  FEAT 3 — FOURNISSEURS
 // ══════════════════════════════════════════════════════════════════
@@ -1261,9 +1265,7 @@ function SectionCloture({ T, shopId, sales, depenses, comptablePin, currentStaff
               {logout && (
                 <button
                   onClick={() => {
-                    if (window.confirm("Quitter et se déconnecter de la session du commerce ?")) {
-                      logout();
-                    }
+                    logout();
                   }}
                   style={{ width:"100%", background:T.btnRed.bg, border:`1.5px solid ${T.red}44`, borderRadius:10, padding:10, fontWeight:800, color:T.red, fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:6 }}
                 >
@@ -1327,9 +1329,7 @@ function SectionCloture({ T, shopId, sales, depenses, comptablePin, currentStaff
           {logout && (
             <button
               onClick={() => {
-                if (window.confirm("Confirmer la déconnexion de la session du commerce ?")) {
-                  logout();
-                }
+                logout();
               }}
               style={{ background:T.btnRed.bg, border:`1.5px solid ${T.red}44`, borderRadius:10, padding:"5px 10px", fontSize:11, fontWeight:700, color:T.red, cursor:"pointer", display:"flex", alignItems:"center", gap:4 }}
             >
@@ -1552,6 +1552,553 @@ function MonnaieCalculator({ T, total, onClose }) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+//  FEAT 9-B — SECTION CALCULATEUR DE MONNAIE (Onglet Plus)
+// ══════════════════════════════════════════════════════════════════
+function SectionMonnaieCalculator({ T }) {
+  const [totalStr, setTotalStr] = useState("");
+  const [recuStr, setRecuStr] = useState("");
+
+  const total = parseInt(totalStr.replace(/\D/g, ""), 10) || 0;
+  const recu = parseInt(recuStr.replace(/\D/g, ""), 10) || 0;
+  const monnaie = recu - total;
+
+  const BILLETS = [10000, 5000, 2000, 1000, 500, 200, 100, 50, 25];
+  const decompose = (amount) => {
+    let rest = amount;
+    const r = [];
+    for (const b of BILLETS) {
+      const n = Math.floor(rest / b);
+      if (n > 0) {
+        r.push({ val: b, n });
+        rest -= b * n;
+      }
+    }
+    return r;
+  };
+
+  const quickBills = [500, 1000, 2000, 5000, 10000, 20000];
+  const quickTotals = [500, 1000, 1500, 2000, 2500, 5000, 10000, 20000];
+
+  const addBillToRecu = (val) => {
+    setRecuStr(String(recu + val));
+  };
+
+  const handleClear = () => {
+    setTotalStr("");
+    setRecuStr("");
+  };
+
+  return (
+    <div style={{ maxWidth: 560, margin: "0 auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800 }}>🧮 Rendu de Monnaie</div>
+          <div style={{ fontSize: 11, color: T.textMute }}>Calculateur automatique de monnaie et décomposition en billets</div>
+        </div>
+        {(totalStr || recuStr) && (
+          <button
+            onClick={handleClear}
+            style={{
+              background: T.surface2,
+              border: `1px solid ${T.border}`,
+              borderRadius: 8,
+              padding: "5px 12px",
+              fontSize: 11,
+              fontWeight: 700,
+              color: T.textMute,
+              cursor: "pointer"
+            }}
+          >
+            Effacer
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+        {/* TOTAL A PAYER */}
+        <div style={{ background: T.surface, borderRadius: 14, padding: 12, border: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.textMute, marginBottom: 6 }}>1. Montant dû (Total)</div>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="0 F"
+            value={totalStr}
+            onChange={(e) => setTotalStr(e.target.value.replace(/\D/g, ""))}
+            style={{
+              width: "100%",
+              background: T.inputBg,
+              border: `1.5px solid ${total > 0 ? T.accent : T.inputBd}`,
+              borderRadius: 10,
+              padding: "10px 12px",
+              color: T.text,
+              fontSize: 18,
+              fontWeight: 800,
+              textAlign: "center",
+              marginBottom: 8
+            }}
+          />
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {quickTotals.map((val) => (
+              <button
+                key={val}
+                onClick={() => setTotalStr(String(val))}
+                style={{
+                  flex: "1 0 auto",
+                  background: total === val ? T.accent : T.surface2,
+                  border: "none",
+                  borderRadius: 6,
+                  padding: "4px 6px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: total === val ? T.bg : T.text,
+                  cursor: "pointer"
+                }}
+              >
+                {fmtPrice(val)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* MONTANT REÇU */}
+        <div style={{ background: T.surface, borderRadius: 14, padding: 12, border: `1px solid ${T.border}` }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: T.textMute, marginBottom: 6 }}>2. Montant reçu du client</div>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="0 F"
+            value={recuStr}
+            onChange={(e) => setRecuStr(e.target.value.replace(/\D/g, ""))}
+            style={{
+              width: "100%",
+              background: T.inputBg,
+              border: `1.5px solid ${recu >= total && total > 0 ? T.green : T.inputBd}`,
+              borderRadius: 10,
+              padding: "10px 12px",
+              color: T.text,
+              fontSize: 18,
+              fontWeight: 800,
+              textAlign: "center",
+              marginBottom: 8
+            }}
+          />
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {quickBills.map((b) => (
+              <button
+                key={b}
+                onClick={() => addBillToRecu(b)}
+                title={`Ajouter ${fmtPrice(b)}`}
+                style={{
+                  flex: "1 0 auto",
+                  background: T.surface2,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 6,
+                  padding: "4px 6px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: T.text,
+                  cursor: "pointer"
+                }}
+              >
+                +{b >= 1000 ? `${b / 1000}k` : b}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* RÉSULTAT DU CALCUL */}
+      {total > 0 && recu > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          {recu >= total ? (
+            <div style={{ background: T.btnGreen?.bg || "rgba(16,185,129,0.12)", border: `2px solid ${T.green}`, borderRadius: 16, padding: 18, textAlign: "center" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.textMute, textTransform: "uppercase", letterSpacing: 1 }}>
+                Monnaie à rendre au client
+              </div>
+              <div style={{ fontSize: 36, fontWeight: 900, color: T.green, margin: "6px 0" }}>
+                {fmtPrice(monnaie)}
+              </div>
+              {monnaie === 0 ? (
+                <div style={{ fontSize: 12, color: T.green, fontWeight: 700 }}>
+                  Compte exact ! Aucune monnaie à rendre.
+                </div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 11, color: T.textMute, marginBottom: 8 }}>Décomposition suggérée en coupures :</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center" }}>
+                    {decompose(monnaie).map(({ val, n }) => (
+                      <div
+                        key={val}
+                        style={{
+                          background: T.surface,
+                          border: `1px solid ${T.border}`,
+                          borderRadius: 10,
+                          padding: "6px 12px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6
+                        }}
+                      >
+                        <span style={{ fontSize: 14 }}>{val >= 500 ? "💵" : "🪙"}</span>
+                        <span style={{ fontWeight: 800, fontSize: 13, color: T.text }}>
+                          {n} × {fmtPrice(val)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ background: T.btnRed?.bg || "rgba(239,68,68,0.12)", border: `2px solid ${T.red}`, borderRadius: 16, padding: 18, textAlign: "center" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: T.textMute, textTransform: "uppercase", letterSpacing: 1 }}>
+                Montant insuffisant — Manque
+              </div>
+              <div style={{ fontSize: 34, fontWeight: 900, color: T.red, margin: "6px 0" }}>
+                -{fmtPrice(Math.abs(monnaie))}
+              </div>
+              <div style={{ fontSize: 12, color: T.red, fontWeight: 700 }}>
+                Le client doit encore fournir {fmtPrice(Math.abs(monnaie))} pour solder la transaction.
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* SUGGESTIONS DE BILLETS SI REÇU NON ENCORE SAISI */}
+      {total > 0 && recu === 0 && (
+        <div style={{ background: T.surface, borderRadius: 14, padding: 12, border: `1px solid ${T.border}`, textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: T.textMute, marginBottom: 8 }}>Sélection rapide du billet reçu :</div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "center" }}>
+            {[total, Math.ceil(total / 500) * 500, Math.ceil(total / 1000) * 1000, Math.ceil(total / 2000) * 2000, Math.ceil(total / 5000) * 5000, 10000, 20000]
+              .filter((v, i, a) => v >= total && a.indexOf(v) === i)
+              .slice(0, 5)
+              .map((q) => (
+                <button
+                  key={q}
+                  onClick={() => setRecuStr(String(q))}
+                  style={{
+                    background: q === total ? T.green : T.surface2,
+                    border: `1px solid ${T.border}`,
+                    borderRadius: 8,
+                    padding: "6px 12px",
+                    fontWeight: 700,
+                    fontSize: 11,
+                    color: q === total ? "#fff" : T.text,
+                    cursor: "pointer"
+                  }}
+                >
+                  {q === total ? `Compte exact (${fmtPrice(q)})` : fmtPrice(q)}
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  BOUTON D'INSTALLATION PWA DANS LE HEADER
+// ══════════════════════════════════════════════════════════════════
+function PWAInstallHeaderButton({ T, flashMsg }) {
+  const [isInstalled, setIsInstalled] = useState(() => {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  });
+  const [canInstall, setCanInstall] = useState(!!window.deferredPWAInstallPrompt);
+  const [showIOSGuide, setShowIOSGuide] = useState(false);
+
+  useEffect(() => {
+    const handleReady = () => setCanInstall(true);
+    const handleInstalled = () => {
+      setIsInstalled(true);
+      setCanInstall(false);
+      if (typeof flashMsg === "function") flashMsg("Application installée avec succès ! 🎉");
+    };
+
+    window.addEventListener('pwa-prompt-ready', handleReady);
+    window.addEventListener('appinstalled', handleInstalled);
+    return () => {
+      window.removeEventListener('pwa-prompt-ready', handleReady);
+      window.removeEventListener('appinstalled', handleInstalled);
+    };
+  }, [flashMsg]);
+
+  const handleInstallClick = async () => {
+    if (window.deferredPWAInstallPrompt) {
+      window.deferredPWAInstallPrompt.prompt();
+      const choice = await window.deferredPWAInstallPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        if (typeof flashMsg === "function") flashMsg("Installation de l'application en cours...");
+      }
+      window.deferredPWAInstallPrompt = null;
+      setCanInstall(false);
+    } else {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      if (isIOS) {
+        setShowIOSGuide(true);
+      } else {
+        if (typeof flashMsg === "function") {
+          flashMsg("Pour installer : Menu de votre navigateur ⋮ > 'Installer l'application' ou 'Ajouter à l'écran d'accueil'");
+        }
+      }
+    }
+  };
+
+  if (isInstalled) {
+    return (
+      <span
+        title="Application installée et active en mode autonome (PWA)"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          background: "rgba(16,185,129,0.12)",
+          border: `1px solid ${T.green}44`,
+          borderRadius: 8,
+          padding: "4px 8px",
+          fontSize: 10,
+          fontWeight: 700,
+          color: T.green
+        }}
+      >
+        <span>📲</span>
+        <span>PWA</span>
+      </span>
+    );
+  }
+
+  return (
+    <>
+      <button
+        onClick={handleInstallClick}
+        title="Installer Caisse Pro sur votre écran d'accueil (Accès hors-ligne & plein écran)"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 4,
+          background: T.accent,
+          border: "none",
+          borderRadius: 8,
+          padding: "5px 9px",
+          fontSize: 11,
+          fontWeight: 800,
+          color: T.bg,
+          cursor: "pointer",
+          whiteSpace: "nowrap",
+          boxShadow: "0 2px 6px rgba(0,0,0,0.15)"
+        }}
+      >
+        <span>📲</span>
+        <span>Installer</span>
+      </button>
+
+      {showIOSGuide && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: 16 }}>
+          <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, maxWidth: 360, width: "100%", padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ fontWeight: 800, fontSize: 15 }}>📲 Installer sur iPhone / iPad</div>
+              <button onClick={() => setShowIOSGuide(false)} style={{ background: T.surface2, border: "none", borderRadius: 8, width: 28, height: 28 }}>✕</button>
+            </div>
+            <div style={{ fontSize: 13, lineHeight: 1.5, color: T.text, marginBottom: 16 }}>
+              <p style={{ margin: "0 0 10px 0" }}><b>1.</b> Touchez le bouton <b>Partager</b> <span style={{ fontSize: 16 }}>⎋</span> en bas de Safari.</p>
+              <p style={{ margin: "0 0 10px 0" }}><b>2.</b> Faites défiler et touchez <b>« Sur l'écran d'accueil »</b> ➕.</p>
+              <p style={{ margin: 0 }}><b>3.</b> Confirmez avec <b>« Ajouter »</b> en haut à droite.</p>
+            </div>
+            <button
+              onClick={() => setShowIOSGuide(false)}
+              style={{ width: "100%", background: T.accent, border: "none", borderRadius: 10, padding: 10, fontWeight: 700, color: T.bg }}
+            >
+              Compris
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
+//  SECTION PWA ET HORS-LIGNE (Onglet Plus)
+// ══════════════════════════════════════════════════════════════════
+function SectionPWAInstall({ T, flashMsg }) {
+  const [isInstalled, setIsInstalled] = useState(() => {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  });
+  const [swActive, setSwActive] = useState(() => !!navigator.serviceWorker?.controller);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then(() => setSwActive(true));
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  const handlePromptInstall = async () => {
+    if (window.deferredPWAInstallPrompt) {
+      window.deferredPWAInstallPrompt.prompt();
+      const choice = await window.deferredPWAInstallPrompt.userChoice;
+      if (choice.outcome === 'accepted') {
+        if (typeof flashMsg === "function") flashMsg("Application en cours d'installation !");
+      }
+    } else {
+      if (typeof flashMsg === "function") {
+        flashMsg("Menu de votre navigateur ⋮ > 'Installer l'application' ou 'Ajouter à l'écran d'accueil'");
+      }
+    }
+  };
+
+  const handleUpdateApp = () => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        for (const reg of regs) {
+          reg.update();
+        }
+        if (typeof flashMsg === "function") flashMsg("Recherche de mise à jour effectuée !");
+        setTimeout(() => window.location.reload(), 600);
+      });
+    } else {
+      window.location.reload();
+    }
+  };
+
+  return (
+    <div style={{ maxWidth: 580, margin: "0 auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 16, fontWeight: 800 }}>📲 Application Web Progressive (PWA)</div>
+          <div style={{ fontSize: 11, color: T.textMute }}>Installation sur téléphone, tablette ou PC & mode autonome hors-ligne</div>
+        </div>
+      </div>
+
+      {/* CARTE STATUT */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+          <div style={{ width: 44, height: 44, borderRadius: 12, background: T.accent, color: T.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>
+            📲
+          </div>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: 15 }}>
+              {isInstalled ? "Application installée (Mode autonome)" : "Prête pour installation PWA"}
+            </div>
+            <div style={{ fontSize: 11, color: isInstalled ? T.green : T.textMute }}>
+              {isInstalled ? "✅ Fonctionne comme une application native sans barre de navigation" : "Installez l'application pour un accès direct depuis votre écran d'accueil"}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+          <div style={{ background: T.surface2, borderRadius: 10, padding: 10 }}>
+            <div style={{ fontSize: 10, color: T.textMute }}>Connexion internet</div>
+            <div style={{ fontWeight: 800, fontSize: 13, color: isOnline ? T.green : T.red, display: "flex", alignItems: "center", gap: 5 }}>
+              <span>{isOnline ? "🟢" : "🔴"}</span>
+              <span>{isOnline ? "En ligne" : "Hors-ligne"}</span>
+            </div>
+          </div>
+          <div style={{ background: T.surface2, borderRadius: 10, padding: 10 }}>
+            <div style={{ fontSize: 10, color: T.textMute }}>Cache Service Worker</div>
+            <div style={{ fontWeight: 800, fontSize: 13, color: swActive ? T.green : T.orange, display: "flex", alignItems: "center", gap: 5 }}>
+              <span>{swActive ? "⚡" : "⏳"}</span>
+              <span>{swActive ? "Actif & Prêt" : "En cours..."}</span>
+            </div>
+          </div>
+        </div>
+
+        {!isInstalled && (
+          <button
+            onClick={handlePromptInstall}
+            style={{
+              width: "100%",
+              background: T.accent,
+              border: "none",
+              borderRadius: 12,
+              padding: "12px 16px",
+              fontWeight: 800,
+              fontSize: 14,
+              color: T.bg,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.12)"
+            }}
+          >
+            <span>📲</span>
+            <span>Installer l'application sur cet appareil</span>
+          </button>
+        )}
+      </div>
+
+      {/* AVANTAGES PWA */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>✨ Avantages du mode PWA</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12, color: T.text }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <span>⚡</span>
+            <div><b>Fonctionnement 100% Hors-ligne :</b> Vos produits, tickets et ventes restent enregistrés localement même sans réseau internet.</div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <span>🖥️</span>
+            <div><b>Plein écran immersif :</b> Aucun bandeau de navigateur encombrant, navigation fluide pour les caissiers.</div>
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <span>🚀</span>
+            <div><b>Démarrage ultra-rapide :</b> L'application charge instantanément depuis le cache sécurisé du terminal.</div>
+          </div>
+        </div>
+      </div>
+
+      {/* GUIDE PAR APPAREIL */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 8 }}>📖 Guide d'installation manuelle</div>
+        <div style={{ fontSize: 12, lineHeight: 1.5, color: T.textMute }}>
+          <div style={{ marginBottom: 8 }}>
+            <b style={{ color: T.text }}>• Android / Chrome :</b> Touchez les <b>3 points verticaux (⋮)</b> en haut à droite &gt; <b>« Installer l'application »</b>.
+          </div>
+          <div style={{ marginBottom: 8 }}>
+            <b style={{ color: T.text }}>• iPhone / Safari :</b> Touchez le bouton <b>Partager (⎋)</b> &gt; <b>« Sur l'écran d'accueil »</b> &gt; <b>« Ajouter »</b>.
+          </div>
+          <div>
+            <b style={{ color: T.text }}>• PC / Mac (Chrome/Edge) :</b> Cliquez sur la petite icône d'installation <b>(⊕)</b> dans la barre d'adresse.
+          </div>
+        </div>
+      </div>
+
+      {/* ACTIONS DE MISE À JOUR */}
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          onClick={handleUpdateApp}
+          style={{
+            flex: 1,
+            background: T.surface2,
+            border: `1px solid ${T.border}`,
+            borderRadius: 10,
+            padding: 10,
+            fontWeight: 700,
+            fontSize: 12,
+            color: T.text,
+            cursor: "pointer"
+          }}
+        >
+          🔄 Mettre à jour l'application (Vider le cache)
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  FEAT 10 — DEVIS RAPIDE
 // ══════════════════════════════════════════════════════════════════
 function SectionDevis({ T, shopId, shopName, products, addSale, flashMsg }) {
@@ -1739,9 +2286,7 @@ function SectionSessions({ T, shopId, sales, caissiers, logout }) {
       {logout && (
         <button
           onClick={() => {
-            if (window.confirm("Confirmer la déconnexion de la session du commerce ?")) {
-              logout();
-            }
+            logout();
           }}
           title="Se déconnecter du commerce"
           style={{
@@ -1999,9 +2544,7 @@ function SectionEquipe({
           {logout && (
             <button
               onClick={() => {
-                if (window.confirm("Confirmer la déconnexion de la session du commerce ?")) {
-                  logout();
-                }
+                logout();
               }}
               title="Se déconnecter du commerce"
               style={{
@@ -4424,10 +4967,26 @@ function MainApp({
   shopId, shopName, ownerName, shopPhone, shopAddress, shopSlogan, shopLogo,
   ticketFormat, ticketCopies, ticketFooter, whatsappDev,
   themeName, setThemeName, logout, flashMsg,
-  cloudEnabled = true, setShopCloud
+  cloudEnabled = true, setShopCloud, onOpenDevModal
 }) {
   const T = THEMES[themeName] || THEMES.dark;
   const today = new Date().toISOString().slice(0, 10);
+
+  // Triple-clic logo commerce pour accès développeur secret
+  const shopLogoClicksRef = useRef(0);
+  const shopLogoTimerRef = useRef(null);
+  const handleShopLogoTripleClick = () => {
+    shopLogoClicksRef.current += 1;
+    if (shopLogoTimerRef.current) clearTimeout(shopLogoTimerRef.current);
+    if (shopLogoClicksRef.current >= 3) {
+      shopLogoClicksRef.current = 0;
+      if (onOpenDevModal) onOpenDevModal();
+    } else {
+      shopLogoTimerRef.current = setTimeout(() => {
+        shopLogoClicksRef.current = 0;
+      }, 1000);
+    }
+  };
 
   // ÉTATS LOCAUX / SYNCHRONISÉS
   const [products, setProducts] = useState(() => OfflineStore.get(shopId, "products", []));
@@ -4472,6 +5031,7 @@ function MainApp({
   const [authPinInput, setAuthPinInput] = useState("");
   const [authPinError, setAuthPinError] = useState(false);
   const [tempUnlockedExpenses, setTempUnlockedExpenses] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   // Rôle actif et permissions
   const userRoleKey = currentStaff?.role || "proprietaire";
@@ -4760,13 +5320,15 @@ function MainApp({
   const renderPlusContent = () => {
     switch(plusSubTab) {
       case "kpi":
-        return <SectionKPI T={T} sales={sales} depenses={depenses} products={products} />;
+        return <SectionKPI T={T} sales={sales} depenses={depenses} products={products} credits={dettes} />;
       case "monnaie":
         return <SectionMonnaieCalculator T={T} />;
       case "crm":
         return <SectionCRM T={T} shopId={shopId} sales={sales} flashMsg={flashMsg} />;
       case "promo":
         return <SectionPromo T={T} shopId={shopId} flashMsg={flashMsg} />;
+      case "pwa":
+        return <SectionPWAInstall T={T} flashMsg={flashMsg} />;
       case "fournisseurs":
         return <SectionFournisseurs T={T} shopId={shopId} flashMsg={flashMsg} />;
       case "abonnements":
@@ -4946,7 +5508,11 @@ function MainApp({
     <div style={{ display:"flex", flexDirection:"column", height:"100vh", background:T.bg, color:T.text, overflow:"hidden" }}>
       {/* ── HEADER ── */}
       <header style={{ background:T.header, borderBottom:`1px solid ${T.border}`, padding:"8px 12px", display:"flex", justifyContent:"space-between", alignItems:"center", gap:8, flexShrink:0 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+        <div
+          onClick={handleShopLogoTripleClick}
+          title={`${shopName || "Commerce"} (Triple-clic pour accès développeur)`}
+          style={{ display:"flex", alignItems:"center", gap:8, cursor:"pointer", userSelect:"none" }}
+        >
           {shopLogo ? (
             <img src={shopLogo} alt="Logo" style={{ width:32, height:32, borderRadius:8, objectFit:"cover" }} />
           ) : (
@@ -5000,6 +5566,9 @@ function MainApp({
             <span style={{ fontSize: 9, opacity: 0.7 }}>▾</span>
           </button>
 
+          {/* BOUTON INSTALLATION PWA */}
+          <PWAInstallHeaderButton T={T} flashMsg={flashMsg} />
+
           <div className="hdr-themes theme-toggle" style={{ background:T.surface2 }}>
             <button className={`theme-btn${themeName==="auto"?" active":""}`} onClick={()=>setThemeName("auto")}>⚙️</button>
             <button className={`theme-btn${themeName==="light"?" active":""}`} onClick={()=>setThemeName("light")}>☀️</button>
@@ -5008,11 +5577,7 @@ function MainApp({
           </div>
 
           <button
-            onClick={() => {
-              if (window.confirm(`Confirmer la déconnexion de la session de "${shopName || "ce commerce"}" ?`)) {
-                logout();
-              }
-            }}
+            onClick={() => setShowLogoutModal(true)}
             title="Se déconnecter de la session du commerce"
             aria-label="Déconnexion de la session du commerce"
             style={{
@@ -5453,6 +6018,7 @@ function MainApp({
                 ["equipe","👥 Équipe & Rôles"],
                 ["kpi","📊 KPI"],
                 ["monnaie","🧮 Monnaie"],
+                ["pwa","📲 Application (PWA)"],
                 ["crm","👥 CRM"],
                 ["promo","🏷️ Promo"],
                 ["fournisseurs","🚚 Fournisseurs"],
@@ -5663,10 +6229,8 @@ function MainApp({
                   </div>
                   <button
                     onClick={() => {
-                      if (window.confirm(`Confirmer la déconnexion de la session de "${shopName || "ce commerce"}" ?`)) {
-                        setShowSwitchUserModal(false);
-                        logout();
-                      }
+                      setShowSwitchUserModal(false);
+                      setShowLogoutModal(true);
                     }}
                     style={{
                       width: "100%",
@@ -5769,6 +6333,107 @@ function MainApp({
           </div>
         </div>
       )}
+
+      {/* ── MODAL DE CONFIRMATION DE DÉCONNEXION (IN-APP SANS DIALOGUE BLOQUANT) ── */}
+      {showLogoutModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.8)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowLogoutModal(false); }}
+        >
+          <div
+            style={{
+              background: T.surface,
+              border: `1px solid ${T.border}`,
+              borderRadius: 20,
+              width: "100%",
+              maxWidth: 380,
+              padding: 22,
+              boxShadow: "0 20px 40px rgba(0,0,0,0.6)",
+              textAlign: "center"
+            }}
+          >
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                background: T.btnRed?.bg || "rgba(239,68,68,0.15)",
+                border: `1.5px solid ${T.red || "#ef4444"}44`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 26,
+                margin: "0 auto 14px"
+              }}
+            >
+              🚪
+            </div>
+
+            <div style={{ fontSize: 17, fontWeight: 900, color: T.text, marginBottom: 6 }}>
+              Confirmer la déconnexion
+            </div>
+
+            <div style={{ fontSize: 12, color: T.textMute, lineHeight: 1.5, marginBottom: 20 }}>
+              Voulez-vous quitter la session du commerce <strong style={{ color: T.accent }}>{shopName || "Mon Commerce"}</strong> ? Vos données saisies sont enregistrées localement et synchronisées.
+            </div>
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setShowLogoutModal(false)}
+                style={{
+                  flex: 1,
+                  background: T.surface2,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 12,
+                  padding: "11px 16px",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: T.text,
+                  cursor: "pointer"
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLogoutModal(false);
+                  logout();
+                }}
+                style={{
+                  flex: 1.2,
+                  background: T.red || "#ef4444",
+                  border: "none",
+                  borderRadius: 12,
+                  padding: "11px 16px",
+                  fontSize: 13,
+                  fontWeight: 800,
+                  color: "#FFFFFF",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 14px rgba(239,68,68,0.35)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6
+                }}
+              >
+                <span>🚪</span>
+                <span>Déconnexion</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -5821,6 +6486,30 @@ function App() {
   const [shopDevCodeInput, setShopDevCodeInput] = useState("");
   const [showShopPassword, setShowShopPassword] = useState(false);
 
+  // Triple-clic sur le logo pour accès développeur et super admin secret
+  const logoClicksRef = useRef(0);
+  const logoTimerRef = useRef(null);
+  const [showDevModal, setShowDevModal] = useState(false);
+  const [secretAdminTab, setSecretAdminTab] = useState("dev"); // "dev" | "superadmin"
+  const [devPinModalInput, setDevPinModalInput] = useState("");
+  const [devPinModalError, setDevPinModalError] = useState(false);
+
+  const handleLogoTripleClick = (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    logoClicksRef.current += 1;
+    if (logoTimerRef.current) clearTimeout(logoTimerRef.current);
+    if (logoClicksRef.current >= 3) {
+      logoClicksRef.current = 0;
+      setDevPinModalInput("");
+      setDevPinModalError(false);
+      setShowDevModal(true);
+    } else {
+      logoTimerRef.current = setTimeout(() => {
+        logoClicksRef.current = 0;
+      }, 1000);
+    }
+  };
+
   // Charger les commerces pour le sélecteur de connexion
   useEffect(() => {
     if (!db) { setLoadingShops(false); return; }
@@ -5860,25 +6549,39 @@ function App() {
     return unsub;
   }, [activeShop?.id]);
 
-  const handleDevLogin = () => {
-    if (pinInput === "1996" || pinInput === "1234") {
+  const handleDevLogin = (customPin) => {
+    const entered = (typeof customPin === "string" ? customPin : (devPinModalInput || pinInput)).trim();
+    if (entered === "761278" || entered === DEV_PIN || entered === "1996" || entered === "1234") {
       setUserRole("dev");
       localStorage.setItem("pos_user_role", "dev");
       setPinInput("");
+      setDevPinModalInput("");
+      setDevPinModalError(false);
+      setShowDevModal(false);
       flashMsg("👋 Bienvenue dans l'Administration Développeur");
+      return true;
     } else {
+      setDevPinModalError(true);
       flashMsg("❌ Code PIN développeur incorrect");
+      return false;
     }
   };
 
-  const handleSuperAdminLogin = () => {
-    if (pinInput === "2025" || pinInput === "0000" || pinInput === "1996") {
+  const handleSuperAdminLogin = (customPin) => {
+    const entered = (typeof customPin === "string" ? customPin : (devPinModalInput || pinInput)).trim();
+    if (entered === "2025" || entered === "0000" || entered === "1996" || entered === "761278" || entered === DEV_PIN) {
       setUserRole("superadmin");
       localStorage.setItem("pos_user_role", "superadmin");
       setPinInput("");
+      setDevPinModalInput("");
+      setDevPinModalError(false);
+      setShowDevModal(false);
       flashMsg("🛡️ Bienvenue Super Admin");
+      return true;
     } else {
+      setDevPinModalError(true);
       flashMsg("❌ Code PIN Super Admin incorrect");
+      return false;
     }
   };
 
@@ -5944,7 +6647,7 @@ function App() {
     }
 
     // Code maître développeur bypass
-    if (code === "1996" || code === "1234" || code === "DEV-PRO" || code === "DEV-ADMIN") {
+    if (code === "761278" || code === DEV_PIN || code === "1996" || code === "1234" || code === "DEV-PRO" || code === "DEV-ADMIN") {
       let shop = null;
       if (selectedShopId) shop = availableShops.find(s => s.id === selectedShopId);
       if (!shop) shop = availableShops[0];
@@ -5973,9 +6676,17 @@ function App() {
   const logout = () => {
     setUserRole(null);
     setActiveShop(null);
-    localStorage.removeItem("pos_user_role");
-    localStorage.removeItem("pos_active_shop");
-    flashMsg("Déconnecté");
+    setPinInput("");
+    setShopPasswordInput("");
+    setShopDevCodeInput("");
+    try {
+      localStorage.removeItem("pos_user_role");
+      localStorage.removeItem("pos_active_shop");
+      if (typeof SessionStore !== "undefined" && SessionStore.clear) {
+        SessionStore.clear();
+      }
+    } catch(e) {}
+    flashMsg("👋 Déconnecté avec succès");
   };
 
   // RENDU SELON LE RÔLE
@@ -6009,6 +6720,189 @@ function App() {
     );
   }
 
+  // MODAL ACCÈS RESTREINT SECRET (Triple-clic sur le logo : Développeur & Super Admin)
+  const renderDevModal = () => {
+    const isSuperAdmin = secretAdminTab === "superadmin";
+    const activeColor = isSuperAdmin ? (T.blue || "#3b82f6") : (T.purple || "#8b5cf6");
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.85)",
+          zIndex: 10000,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16
+        }}
+        onClick={(e) => { if (e.target === e.currentTarget) setShowDevModal(false); }}
+      >
+        <div
+          style={{
+            background: T.surface,
+            border: `1.5px solid ${activeColor}`,
+            borderRadius: 22,
+            width: "100%",
+            maxWidth: 360,
+            padding: 24,
+            boxShadow: "0 20px 50px rgba(0,0,0,0.7)",
+            textAlign: "center"
+          }}
+        >
+          {/* SÉLECTEUR D'ACCÈS SECRET : DEV / SUPERADMIN */}
+          <div style={{ display: "flex", gap: 4, background: T.surface2, borderRadius: 12, padding: 3, marginBottom: 16 }}>
+            <button
+              type="button"
+              onClick={() => {
+                setSecretAdminTab("dev");
+                setDevPinModalInput("");
+                setDevPinModalError(false);
+              }}
+              style={{
+                flex: 1,
+                background: !isSuperAdmin ? (T.purple || "#8b5cf6") : "transparent",
+                border: "none",
+                borderRadius: 10,
+                padding: "8px 4px",
+                fontSize: 11,
+                fontWeight: 800,
+                color: !isSuperAdmin ? "#fff" : T.textMute,
+                cursor: "pointer"
+              }}
+            >
+              🛠️ Développeur
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setSecretAdminTab("superadmin");
+                setDevPinModalInput("");
+                setDevPinModalError(false);
+              }}
+              style={{
+                flex: 1,
+                background: isSuperAdmin ? (T.blue || "#3b82f6") : "transparent",
+                border: "none",
+                borderRadius: 10,
+                padding: "8px 4px",
+                fontSize: 11,
+                fontWeight: 800,
+                color: isSuperAdmin ? "#fff" : T.textMute,
+                cursor: "pointer"
+              }}
+            >
+              🛡️ Super Admin
+            </button>
+          </div>
+
+          <div
+            style={{
+              width: 58,
+              height: 58,
+              borderRadius: 29,
+              background: isSuperAdmin ? "rgba(59,130,246,0.15)" : "rgba(139,92,246,0.15)",
+              border: `1.5px solid ${isSuperAdmin ? "rgba(59,130,246,0.4)" : "rgba(139,92,246,0.4)"}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 28,
+              margin: "0 auto 12px"
+            }}
+          >
+            {isSuperAdmin ? "🛡️" : "🛠️"}
+          </div>
+
+          <div style={{ fontSize: 18, fontWeight: 900, color: T.text, marginBottom: 4 }}>
+            {isSuperAdmin ? "Espace Super Admin" : "Administration Développeur"}
+          </div>
+          <div style={{ fontSize: 11, color: T.textMute, lineHeight: 1.4, marginBottom: 18 }}>
+            {isSuperAdmin
+              ? "Accès restreint. Entrez le code PIN Super Admin pour gérer l'ensemble des commerces :"
+              : "Accès restreint. Entrez le code PIN développeur (761278) pour déverrouiller :"}
+          </div>
+
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            if (isSuperAdmin) {
+              handleSuperAdminLogin(devPinModalInput);
+            } else {
+              handleDevLogin(devPinModalInput);
+            }
+          }}>
+            <input
+              type="password"
+              autoFocus
+              maxLength={10}
+              placeholder={isSuperAdmin ? "Code PIN Super Admin" : "Code PIN (761278)"}
+              value={devPinModalInput}
+              onChange={(e) => {
+                setDevPinModalInput(e.target.value.replace(/\D/g,""));
+                setDevPinModalError(false);
+              }}
+              style={{
+                width: "100%",
+                background: T.inputBg,
+                border: `2px solid ${devPinModalError ? (T.red || "#ef4444") : activeColor}`,
+                borderRadius: 12,
+                padding: "12px",
+                color: T.text,
+                fontSize: 20,
+                textAlign: "center",
+                letterSpacing: 6,
+                marginBottom: 8,
+                outline: "none"
+              }}
+            />
+            {devPinModalError && (
+              <div style={{ color: T.red || "#ef4444", fontSize: 11, fontWeight: 700, marginBottom: 12 }}>
+                ❌ Code PIN incorrect
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+              <button
+                type="button"
+                onClick={() => setShowDevModal(false)}
+                style={{
+                  flex: 1,
+                  background: T.surface2,
+                  border: `1px solid ${T.border}`,
+                  borderRadius: 12,
+                  padding: "11px 16px",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  color: T.text,
+                  cursor: "pointer"
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                style={{
+                  flex: 1.3,
+                  background: activeColor,
+                  border: "none",
+                  borderRadius: 12,
+                  padding: "11px 16px",
+                  fontSize: 13,
+                  fontWeight: 800,
+                  color: "#ffffff",
+                  cursor: "pointer",
+                  boxShadow: `0 4px 14px ${isSuperAdmin ? "rgba(59,130,246,0.4)" : "rgba(139,92,246,0.4)"}`
+                }}
+              >
+                {isSuperAdmin ? "Connexion →" : "Déverrouiller →"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  };
+
   if (userRole === "shop" && activeShop) {
     return (
       <>
@@ -6031,7 +6925,13 @@ function App() {
           logout={logout}
           flashMsg={flashMsg}
           cloudEnabled={activeShop.cloudEnabled !== false}
+          onOpenDevModal={() => {
+            setDevPinModalInput("");
+            setDevPinModalError(false);
+            setShowDevModal(true);
+          }}
         />
+        {showDevModal && renderDevModal()}
       </>
     );
   }
@@ -6042,31 +6942,19 @@ function App() {
       {flash && <div className="flash-toast">{flash}</div>}
 
       <div style={{ background:T.surface, borderRadius:24, padding:24, width:"100%", maxWidth:390, border:`1px solid ${T.border}`, boxShadow:"0 10px 40px rgba(0,0,0,0.3)" }}>
-        <div style={{ textAlign:"center", marginBottom:20 }}>
+        {/* LOGO AVEC ACCÈS RESTREINT CACHÉ PAR TRIPLE-CLIC */}
+        <div
+          onClick={handleLogoTripleClick}
+          title="Caisse SaaS Pro (Triple-clic pour accès administration)"
+          style={{ textAlign:"center", marginBottom:20, cursor:"pointer", userSelect:"none" }}
+        >
           <div style={{ fontSize:40, marginBottom:4 }}>🏪</div>
           <div style={{ fontFamily:"'Outfit'", fontSize:20, fontWeight:900, color:T.accent }}>Caisse SaaS Pro</div>
           <div style={{ fontSize:11, color:T.textMute }}>Point de vente & Synchronisation Cloud</div>
         </div>
 
-        {/* ONGLETS DE CONNEXION */}
-        <div style={{ display:"flex", gap:4, background:T.surface2, borderRadius:12, padding:3, marginBottom:16 }}>
-          <button onClick={()=>{setLoginMode("shop"); setPinInput("");}}
-            style={{ flex:1, background:loginMode==="shop"?T.accent:"transparent", border:"none", borderRadius:10, padding:"8px 4px", fontSize:11, fontWeight:700, color:loginMode==="shop"?T.bg:T.textMute }}>
-            🏪 Commerce
-          </button>
-          <button onClick={()=>{setLoginMode("dev"); setPinInput("");}}
-            style={{ flex:1, background:loginMode==="dev"?T.purple:"transparent", border:"none", borderRadius:10, padding:"8px 4px", fontSize:11, fontWeight:700, color:loginMode==="dev"?"#fff":T.textMute }}>
-            🛠️ Dev
-          </button>
-          <button onClick={()=>{setLoginMode("superadmin"); setPinInput("");}}
-            style={{ flex:1, background:loginMode==="superadmin"?T.blue:"transparent", border:"none", borderRadius:10, padding:"8px 4px", fontSize:11, fontWeight:700, color:loginMode==="superadmin"?"#fff":T.textMute }}>
-            🛡️ SuperAdmin
-          </button>
-        </div>
-
-        {loginMode === "shop" && (
-          <div>
-            {/* SOUS-ONGLETS DE CONNEXION COMMERCE */}
+        <div>
+          {/* SOUS-ONGLETS DE CONNEXION COMMERCE */}
             <div style={{ display:"flex", gap:4, background:T.surface2, border:`1px solid ${T.border}`, borderRadius:12, padding:3, marginBottom:16 }}>
               <button
                 type="button"
@@ -6215,60 +7103,50 @@ function App() {
               </a>
             </div>
           </div>
-        )}
-
-        {loginMode === "dev" && (
-          <div>
-            <div style={{ fontSize:11, color:T.textMute, marginBottom:8 }}>
-              Entrez le PIN Développeur pour accéder au contrôle des abonnements et au basculement Cloud/Local :
-            </div>
-            <input
-              type="password"
-              placeholder="PIN Développeur (1996 ou 1234)"
-              maxLength={6}
-              value={pinInput}
-              onChange={e => setPinInput(e.target.value.replace(/\D/g,""))}
-              onKeyDown={e => { if (e.key === "Enter") handleDevLogin(); }}
-              style={{ width:"100%", background:T.inputBg, border:`1px solid ${T.inputBd}`, borderRadius:12, padding:12, color:T.text, fontSize:16, textAlign:"center", letterSpacing:4, marginBottom:16 }}
-            />
-            <button onClick={handleDevLogin}
-              style={{ width:"100%", background:T.purple, border:"none", borderRadius:14, padding:14, fontWeight:800, color:"#fff", fontSize:14 }}>
-              Connexion Développeur →
-            </button>
-          </div>
-        )}
-
-        {loginMode === "superadmin" && (
-          <div>
-            <div style={{ fontSize:11, color:T.textMute, marginBottom:8 }}>
-              Entrez le PIN Super Admin pour gérer l'ensemble des commerces :
-            </div>
-            <input
-              type="password"
-              placeholder="PIN Super Admin"
-              maxLength={6}
-              value={pinInput}
-              onChange={e => setPinInput(e.target.value.replace(/\D/g,""))}
-              onKeyDown={e => { if (e.key === "Enter") handleSuperAdminLogin(); }}
-              style={{ width:"100%", background:T.inputBg, border:`1px solid ${T.inputBd}`, borderRadius:12, padding:12, color:T.text, fontSize:16, textAlign:"center", letterSpacing:4, marginBottom:16 }}
-            />
-            <button onClick={handleSuperAdminLogin}
-              style={{ width:"100%", background:T.blue, border:"none", borderRadius:14, padding:14, fontWeight:800, color:"#fff", fontSize:14 }}>
-              Connexion Super Admin →
-            </button>
-          </div>
-        )}
 
         <div style={{ textAlign:"center", marginTop:20, fontSize:10, color:T.textMute }}>
           Support WhatsApp : <a href={`https://wa.me/${DEV_WHATSAPP}`} style={{ color:T.accent, textDecoration:"none", fontWeight:700 }}>{DEV_WHATSAPP}</a>
         </div>
       </div>
+      {showDevModal && renderDevModal()}
     </div>
   );
 }
 
 // Initialisation ReactDOM
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+<!-- PWA Service Worker & Install Prompt Registration -->
+<script>
+window.deferredPWAInstallPrompt = null;
+
+// Capture de l'événement d'installation PWA
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  window.deferredPWAInstallPrompt = e;
+  window.dispatchEvent(new CustomEvent('pwa-prompt-ready'));
+  console.log('[PWA] Prompt d\'installation intercepté et prêt.');
+});
+
+window.addEventListener('appinstalled', () => {
+  window.deferredPWAInstallPrompt = null;
+  window.dispatchEvent(new CustomEvent('pwa-installed'));
+  console.log('[PWA] Application installée avec succès sur le système.');
+});
+
+// Enregistrement du Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then((registration) => {
+        console.log('[PWA] Service Worker enregistré avec succès (scope: ' + registration.scope + ')');
+      })
+      .catch((error) => {
+        console.warn('[PWA] Échec enregistrement Service Worker:', error);
+      });
+  });
+}
 </script>
 </body>
 </html>

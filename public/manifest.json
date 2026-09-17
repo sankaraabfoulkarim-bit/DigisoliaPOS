@@ -1,0 +1,62 @@
+{
+  "id": "/",
+  "name": "Caisse SaaS Pro",
+  "short_name": "Caisse Pro",
+  "description": "Caisse enregistreuse SaaS tout-en-un avec gestion des ventes, stocks, monnaie et mode hors-ligne.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0A0E12",
+  "background_color": "#0A0E12",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["business", "finance", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Vente Rapide",
+      "short_name": "Vente",
+      "description": "Accéder directement au clavier de vente rapide",
+      "url": "/?tab=rapide",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Catalogue & Stock",
+      "short_name": "Catalogue",
+      "description": "Gérer les articles et le stock",
+      "url": "/?tab=catalogue",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Calculateur Monnaie",
+      "short_name": "Monnaie",
+      "description": "Calcul rapide du rendu de monnaie",
+      "url": "/?tab=plus&sub=monnaie",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
