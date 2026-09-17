@@ -296,8 +296,59 @@ function getShopUsername(shop) {
 function getStoreKey(shopId, type) { return `pos_${shopId}_${type}`; }
 
 class OfflineStore {
-  static get(shopId, type) { try { const d = localStorage.getItem(getStoreKey(shopId, type)); return d ? JSON.parse(d) : []; } catch(e){ return []; } }
-  static set(shopId, type, data) { try { localStorage.setItem(getStoreKey(shopId, type), JSON.stringify(data || [])); } catch(e){} }
+  static get(shopId, type, fallback = []) {
+    try {
+      const d = localStorage.getItem(getStoreKey(shopId, type));
+      if (!d) return fallback;
+      const parsed = JSON.parse(d);
+      if (Array.isArray(fallback)) {
+        return Array.isArray(parsed) ? parsed : fallback;
+      }
+      return (parsed !== null && parsed !== undefined) ? parsed : fallback;
+    } catch(e){
+      return fallback;
+    }
+  }
+  static set(shopId, type, data) {
+    try {
+      localStorage.setItem(getStoreKey(shopId, type), JSON.stringify(data || []));
+    } catch(e){}
+  }
+}
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("ErrorBoundary caught:", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: 24, textAlign: "center", background: "rgba(239,68,68,0.08)", borderRadius: 16, margin: "16px auto", maxWidth: 460, border: "1.5px solid rgba(239,68,68,0.3)" }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>⚠️</div>
+          <div style={{ fontSize: 16, fontWeight: 800, color: "#ef4444", marginBottom: 6 }}>
+            Une anomalie temporaire est survenue
+          </div>
+          <div style={{ fontSize: 12, color: "#888", marginBottom: 16, lineHeight: 1.4 }}>
+            {this.state.error?.message || "Impossible de charger cette section"}
+          </div>
+          <button
+            onClick={() => this.setState({ hasError: false, error: null })}
+            style={{ background: "#ef4444", color: "#fff", border: "none", borderRadius: 10, padding: "9px 18px", fontWeight: 700, cursor: "pointer", fontSize: 13 }}
+          >
+            🔄 Réactualiser cette section
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 const SESSION_KEY = "pos_saved_session";
@@ -1138,12 +1189,64 @@ function SectionRepas({ T, sales, products }) {
 // ══════════════════════════════════════════════════════════════════
 //  FEAT 5 — CLÔTURE DES COMPTES
 // ══════════════════════════════════════════════════════════════════
-function SectionCloture({ T, shopId, sales, depenses, comptablePin, currentStaff, staffList = [], logout, flashMsg }) {
+function SectionCloture({ T: passedT, shopId, sales, depenses, comptablePin, currentStaff, staffList = [], logout, flashMsg }) {
+  // Thème sécurisé avec fallbacks complets
+  const T = {
+    bg: "#0F1117",
+    surface: "#1A1F2E",
+    surface2: "#222840",
+    border: "#2A3050",
+    text: "#EDF0F7",
+    textMute: "#8A93B2",
+    accent: "#FFCC00",
+    green: "#34D399",
+    blue: "#60A5FA",
+    red: "#F87171",
+    orange: "#FB923C",
+    inputBg: "#0F1117",
+    inputBd: "#2A3050",
+    btnGreen: { bg: "rgba(16,185,129,0.15)", color: "#34D399" },
+    btnRed: { bg: "rgba(239,68,68,0.15)", color: "#F87171" },
+    btnBlue: { bg: "rgba(59,130,246,0.15)", color: "#60A5FA" },
+    btnAccent: { bg: "#FFCC00", color: "#0F1117" },
+    ...(passedT || {})
+  };
+  if (!T.btnGreen) T.btnGreen = { bg: "rgba(16,185,129,0.15)", color: T.green || "#34D399" };
+  if (!T.btnRed) T.btnRed = { bg: "rgba(239,68,68,0.15)", color: T.red || "#F87171" };
+  if (!T.btnBlue) T.btnBlue = { bg: "rgba(59,130,246,0.15)", color: T.blue || "#60A5FA" };
+
   const today = new Date().toISOString().slice(0,10);
-  const KEY = `pos_cloture_${shopId}`;
-  const KEY_SEMAINE = `pos_cloture_semaine_${shopId}`;
-  const [history, setHistory] = useState(() => { try { return JSON.parse(localStorage.getItem(KEY)||"[]"); } catch(e){ return []; } });
-  const [histSemaine, setHistSemaine] = useState(() => { try { return JSON.parse(localStorage.getItem(KEY_SEMAINE)||"[]"); } catch(e){ return []; } });
+  const KEY = `pos_cloture_${shopId || "default"}`;
+  const KEY_SEMAINE = `pos_cloture_semaine_${shopId || "default"}`;
+
+  const [history, setHistory] = useState(() => {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch(e) {
+      return [];
+    }
+  });
+
+  const [histSemaine, setHistSemaine] = useState(() => {
+    try {
+      const raw = localStorage.getItem(KEY_SEMAINE);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch(e) {
+      return [];
+    }
+  });
+
+  const safeHistory = Array.isArray(history) ? history : [];
+  const safeHistSemaine = Array.isArray(histSemaine) ? histSemaine : [];
+  const safeSales = Array.isArray(sales) ? sales : [];
+  const safeDepenses = Array.isArray(depenses) ? depenses : [];
+  const safeStaffList = Array.isArray(staffList) ? staffList : [];
+
   const [fondCaisse, setFondCaisse] = useState("");
   const [pinInput, setPinInput] = useState("");
   // Le gérant et le propriétaire ont l'accès d'emblée à la clôture
@@ -1157,7 +1260,7 @@ function SectionCloture({ T, shopId, sales, depenses, comptablePin, currentStaff
 
   const tryUnlock = () => {
     // Valide si correspond au comptablePin, ou au PIN d'un gérant/propriétaire
-    const matchesManager = staffList.some(s => (s.role === "proprietaire" || s.role === "gerant") && s.pin === pinInput);
+    const matchesManager = safeStaffList.some(s => s && (s.role === "proprietaire" || s.role === "gerant") && s.pin === pinInput);
     if(pinInput === PIN || pinInput === "0000" || pinInput === "1111" || matchesManager) {
       setUnlocked(true);
       setPinError(false);
@@ -1168,23 +1271,43 @@ function SectionCloture({ T, shopId, sales, depenses, comptablePin, currentStaff
     }
   };
 
-  const todaySales = sales.filter(s=>s.date===today&&!s.cancelled);
-  const caToday = todaySales.reduce((a,s)=>a+(s.total||0),0);
-  const depToday = depenses.filter(d=>d.date===today).reduce((a,d)=>a+(d.montant||0),0);
-  const alreadyClosed = history.find(h=>h.date===today);
+  const todaySales = safeSales.filter(s => s && s.date === today && !s.cancelled);
+  const caToday = todaySales.reduce((a, s) => a + (Number(s.total) || Number(s.montant) || 0), 0);
+  const depToday = safeDepenses.filter(d => d && d.date === today).reduce((a, d) => a + (Number(d.montant) || 0), 0);
+  const alreadyClosed = safeHistory.find(h => h && h.date === today);
 
   // Ventes spécifiques à la caissière connectée
-  const cashierSales = todaySales.filter(s => !currentStaff?.name || s.caissier === currentStaff.name);
-  const caCashier = cashierSales.reduce((a,s)=>a+(s.total||0),0);
+  const cashierSales = todaySales.filter(s => s && (!currentStaff?.name || s.caissier === currentStaff.name));
+  const caCashier = cashierSales.reduce((a, s) => a + (Number(s.total) || Number(s.montant) || 0), 0);
 
   const cloturer = () => {
     if(!fondCaisse) { return; }
-    const fond=parseInt(fondCaisse)||0; const ecart=fond-caToday;
-    const closedBy = currentStaff?.name ? `${currentStaff.name} (${currentStaff.role})` : "Gérant/Propriétaire";
-    const updated=[...history,{date:today,caTheorique:caToday,fondDeclaré:fond,ecart,nbVentes:todaySales.length,depenses:depToday,net:caToday-depToday,closedAt:Date.now(),closedBy}];
-    setHistory(updated); localStorage.setItem(KEY, JSON.stringify(updated));
-    triggerNotification("🔒 Caisse clôturée",`CA: ${fmtPrice(caToday)} | Écart: ${fmtPrice(ecart)}`);
-    if (typeof auditLog !== "undefined" && auditLog.add) {
+    const fond = parseInt(fondCaisse, 10) || 0;
+    const ecart = fond - caToday;
+    const closedBy = currentStaff?.name ? `${currentStaff.name} (${currentStaff.role || 'caissiere'})` : "Gérant/Propriétaire";
+    const updated = [
+      ...safeHistory,
+      {
+        date: today,
+        caTheorique: caToday,
+        fondDeclaré: fond,
+        ecart,
+        nbVentes: todaySales.length,
+        depenses: depToday,
+        net: caToday - depToday,
+        closedAt: Date.now(),
+        closedBy
+      }
+    ];
+    setHistory(updated);
+    try {
+      localStorage.setItem(KEY, JSON.stringify(updated));
+    } catch(e) {}
+    triggerNotification("🔒 Caisse clôturée", `CA: ${fmtPrice(caToday)} | Écart: ${fmtPrice(ecart)}`);
+    if (typeof flashMsg === "function") {
+      flashMsg("✅ Journée clôturée avec succès");
+    }
+    if (typeof auditLog !== "undefined" && auditLog && auditLog.add) {
       auditLog.add(shopId, "cloture", `Clôture Z journalière : CA ${fmtPrice(caToday)}, Écart ${fmtPrice(ecart)}`, closedBy);
     }
   };
@@ -1192,35 +1315,82 @@ function SectionCloture({ T, shopId, sales, depenses, comptablePin, currentStaff
   const cloturerSessionCaissiere = () => {
     setCashierSessionClosed(true);
     triggerNotification("👩‍💼 Session caisse terminée", `${currentStaff?.name || "Caissière"} : ${fmtPrice(caCashier)} encaissé`);
-    if (typeof auditLog !== "undefined" && auditLog.add) {
+    if (typeof flashMsg === "function") {
+      flashMsg("✅ Service de caisse clôturé");
+    }
+    if (typeof auditLog !== "undefined" && auditLog && auditLog.add) {
       auditLog.add(shopId, "session", `Fin de service caissière ${currentStaff?.name || "Caissière"} : ${fmtPrice(caCashier)} (${cashierSales.length} ventes)`, currentStaff?.name || "Caissière");
     }
   };
 
   const getWeek = () => {
-    const now = new Date(); const dow = now.getDay();
-    const diffToMon = (dow===0?-6:1-dow);
-    const lundi = new Date(now); lundi.setDate(now.getDate()+diffToMon); lundi.setHours(0,0,0,0);
-    return Array.from({length:7},(_,i)=>{ const d=new Date(lundi); d.setDate(lundi.getDate()+i); return d.toISOString().slice(0,10); });
+    try {
+      const now = new Date();
+      const dow = now.getDay();
+      const diffToMon = (dow === 0 ? -6 : 1 - dow);
+      const lundi = new Date(now);
+      lundi.setDate(now.getDate() + diffToMon);
+      lundi.setHours(0,0,0,0);
+      return Array.from({length:7}, (_, i) => {
+        const d = new Date(lundi);
+        d.setDate(lundi.getDate() + i);
+        return d.toISOString().slice(0,10);
+      });
+    } catch(e) {
+      return [today];
+    }
   };
   const JOURS = ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"];
   const semaineISO = getWeek();
-  const semaineData = semaineISO.map((date,idx)=>{
-    const isFuture=date>today; const isToday=date===today;
-    const ventes=sales.filter(s=>s.date===date&&!s.cancelled);
-    const ca=ventes.reduce((a,s)=>a+(s.total||0),0);
-    const dep=depenses.filter(d=>d.date===date).reduce((a,d)=>a+(d.montant||0),0);
-    const cloture=history.find(h=>h.date===date);
-    return {date,jour:JOURS[idx],isFuture,isToday,ca,dep,net:ca-dep,nbVentes:ventes.length,cloture};
+  const semaineDebut = Array.isArray(semaineISO) && semaineISO.length > 0 ? semaineISO[0] : today;
+  const semaineFin = Array.isArray(semaineISO) && semaineISO.length > 6 ? semaineISO[6] : today;
+  const semaineData = (Array.isArray(semaineISO) ? semaineISO : [today]).map((date, idx) => {
+    const isFuture = date > today;
+    const isToday = date === today;
+    const ventes = safeSales.filter(s => s && s.date === date && !s.cancelled);
+    const ca = ventes.reduce((a, s) => a + (Number(s.total) || Number(s.montant) || 0), 0);
+    const dep = safeDepenses.filter(d => d && d.date === date).reduce((a, d) => a + (Number(d.montant) || 0), 0);
+    const cloture = safeHistory.find(h => h && h.date === date);
+    return {
+      date,
+      jour: JOURS[idx] || date,
+      isFuture,
+      isToday,
+      ca,
+      dep,
+      net: ca - dep,
+      nbVentes: ventes.length,
+      cloture
+    };
   });
-  const totalSem = semaineData.filter(r=>!r.isFuture).reduce((acc,r)=>({ca:acc.ca+r.ca,dep:acc.dep+r.dep,net:acc.net+r.net,nb:acc.nb+r.nbVentes}),{ca:0,dep:0,net:0,nb:0});
-  const semaineDejaCloturee = histSemaine.find(s=>s.debut===semaineISO[0]);
+  const totalSem = semaineData.filter(r => !r.isFuture).reduce(
+    (acc, r) => ({
+      ca: acc.ca + (r.ca || 0),
+      dep: acc.dep + (r.dep || 0),
+      net: acc.net + (r.net || 0),
+      nb: acc.nb + (r.nbVentes || 0)
+    }),
+    { ca: 0, dep: 0, net: 0, nb: 0 }
+  );
+  const semaineDejaCloturee = safeHistSemaine.find(s => s && s.debut === semaineDebut);
 
   const cloturerSemaine = () => {
-    const recap = {debut:semaineISO[0],fin:semaineISO[6],closedAt:Date.now(),...totalSem,jours:semaineData.filter(r=>!r.isFuture)};
-    const updated=[...histSemaine, recap];
-    setHistSemaine(updated); localStorage.setItem(KEY_SEMAINE, JSON.stringify(updated));
-    triggerNotification("📅 Semaine clôturée",`CA: ${fmtPrice(totalSem.ca)} | Net: ${fmtPrice(totalSem.net)}`);
+    const recap = {
+      debut: semaineDebut,
+      fin: semaineFin,
+      closedAt: Date.now(),
+      ...totalSem,
+      jours: semaineData.filter(r => !r.isFuture)
+    };
+    const updated = [...safeHistSemaine, recap];
+    setHistSemaine(updated);
+    try {
+      localStorage.setItem(KEY_SEMAINE, JSON.stringify(updated));
+    } catch(e) {}
+    triggerNotification("📅 Semaine clôturée", `CA: ${fmtPrice(totalSem.ca)} | Net: ${fmtPrice(totalSem.net)}`);
+    if (typeof flashMsg === "function") {
+      flashMsg("✅ Semaine clôturée avec succès");
+    }
   };
 
   // Si l'utilisateur est une caissière et que la clôture Z générale n'est pas déverrouillée :
@@ -1232,7 +1402,7 @@ function SectionCloture({ T, shopId, sales, depenses, comptablePin, currentStaff
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
             <div>
               <div style={{ fontSize:15, fontWeight:800, color:T.green }}>👩‍💼 Mon Point de Caisse</div>
-              <div style={{ fontSize:10, color:T.textMute }}>Session de {currentStaff.name || "Caissière"} · {today}</div>
+              <div style={{ fontSize:10, color:T.textMute }}>Session de {currentStaff?.name || "Caissière"} · {today}</div>
             </div>
             <span style={{ fontSize:10, background:T.btnGreen.bg, color:T.green, padding:"4px 8px", borderRadius:8, fontWeight:700 }}>
               Caissière
@@ -1359,22 +1529,36 @@ function SectionCloture({ T, shopId, sales, depenses, comptablePin, currentStaff
             <div style={{fontSize:11,color:T.textMute,marginBottom:6}}>Fond de caisse physique compté</div>
             <input placeholder="Montant en F CFA" value={fondCaisse} onChange={e=>setFondCaisse(e.target.value.replace(/\D/g,""))}
               style={{width:"100%",background:T.inputBg,border:`1px solid ${T.inputBd}`,borderRadius:10,padding:10,color:T.text,marginBottom:8}}/>
-            {fondCaisse&&<div style={{background:Math.abs(parseInt(fondCaisse)-caToday)>1000?T.btnRed.bg:T.btnGreen.bg,borderRadius:8,padding:8,marginBottom:8,textAlign:"center",fontSize:13,fontWeight:800,color:Math.abs(parseInt(fondCaisse)-caToday)>1000?T.red:T.green}}>
-              {Math.abs(parseInt(fondCaisse)-caToday)===0?"✅ Caisse juste":parseInt(fondCaisse)>caToday?"⚠️ Excédent":"❌ Manquant"} : {fmtPrice(Math.abs(parseInt(fondCaisse)-caToday))}
+            {fondCaisse&&<div style={{background:Math.abs(parseInt(fondCaisse,10)-caToday)>1000?T.btnRed.bg:T.btnGreen.bg,borderRadius:8,padding:8,marginBottom:8,textAlign:"center",fontSize:13,fontWeight:800,color:Math.abs(parseInt(fondCaisse,10)-caToday)>1000?T.red:T.green}}>
+              {Math.abs(parseInt(fondCaisse,10)-caToday)===0?"✅ Caisse juste":parseInt(fondCaisse,10)>caToday?"⚠️ Excédent":"❌ Manquant"} : {fmtPrice(Math.abs(parseInt(fondCaisse,10)-caToday))}
             </div>}
             <button onClick={cloturer} disabled={!fondCaisse} style={{width:"100%",background:fondCaisse?T.accent:T.surface2,border:"none",borderRadius:12,padding:12,fontWeight:700,color:fondCaisse?T.bg:T.textMute,opacity:fondCaisse?1:0.6}}>🔒 Clôturer la journée</button>
           </>) : <div style={{background:T.btnGreen.bg,borderRadius:12,padding:12,textAlign:"center",color:T.green,fontWeight:700}}>✅ Journée clôturée — {fmtPrice(alreadyClosed.caTheorique)}</div>}
         </div>
         <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Historique journées</div>
-        {[...history].reverse().slice(0,10).map(h=><div key={h.date} style={{background:T.surface,borderRadius:10,padding:10,marginBottom:6}}>
-          <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:700}}>{h.date}</span><span style={{color:T.green,fontWeight:700}}>{fmtPrice(h.caTheorique)}</span></div>
-          <div style={{fontSize:10,color:T.textMute}}>{h.nbVentes} ventes · Net: {fmtPrice(h.net||0)} · Écart: <span style={{color:h.ecart===0?T.green:Math.abs(h.ecart)>1000?T.red:T.orange,fontWeight:700}}>{fmtPrice(h.ecart)}</span></div>
-        </div>)}
+        {safeHistory.length === 0 ? (
+          <div style={{background:T.surface, borderRadius:10, padding:14, textAlign:"center", color:T.textMute, fontSize:11}}>
+            Aucune clôture enregistrée pour le moment
+          </div>
+        ) : (
+          [...safeHistory].reverse().slice(0,10).map((h, idx) => (
+            <div key={h.date || idx} style={{background:T.surface,borderRadius:10,padding:10,marginBottom:6}}>
+              <div style={{display:"flex",justifyContent:"space-between"}}>
+                <span style={{fontWeight:700}}>{h.date || "Date inconnue"}</span>
+                <span style={{color:T.green,fontWeight:700}}>{fmtPrice(h.caTheorique || 0)}</span>
+              </div>
+              <div style={{fontSize:10,color:T.textMute}}>
+                {h.nbVentes || 0} ventes · Net: {fmtPrice(h.net||0)} · Écart: <span style={{color:(h.ecart===0?T.green:Math.abs(h.ecart||0)>1000?T.red:T.orange),fontWeight:700}}>{fmtPrice(h.ecart||0)}</span>
+                {h.closedBy ? ` · Par: ${h.closedBy}` : ""}
+              </div>
+            </div>
+          ))
+        )}
       </>)}
 
       {viewMode==="semaine" && (<>
         <div style={{background:T.surface,borderRadius:16,padding:14,marginBottom:12}}>
-          <div style={{fontSize:12,fontWeight:700,marginBottom:10}}>Semaine du {semaineISO[0]} au {semaineISO[5]}</div>
+          <div style={{fontSize:12,fontWeight:700,marginBottom:10}}>Semaine du {semaineDebut} au {semaineFin}</div>
           {semaineData.map(r=>(
             <div key={r.date} style={{marginBottom:6,borderRadius:10,padding:"9px 10px",background:r.isToday?T.accent+"18":r.isFuture?T.surface2+"88":"transparent",border:r.isToday?`1px solid ${T.accent}55`:`1px solid ${T.border}`,opacity:r.isFuture?0.4:1}}>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1400,14 +1584,24 @@ function SectionCloture({ T, shopId, sales, depenses, comptablePin, currentStaff
           {!semaineDejaCloturee ? (
             <button onClick={cloturerSemaine} style={{width:"100%",background:T.accent,border:"none",borderRadius:12,padding:12,fontWeight:800,color:T.bg,marginTop:10,fontSize:13}}>📅 Arrêter les comptes de la semaine</button>
           ) : (
-            <div style={{background:T.btnGreen.bg,borderRadius:12,padding:12,textAlign:"center",color:T.green,fontWeight:700,marginTop:10}}>✅ Semaine clôturée le {new Date(semaineDejaCloturee.closedAt).toLocaleDateString("fr-FR")}</div>
+            <div style={{background:T.btnGreen.bg,borderRadius:12,padding:12,textAlign:"center",color:T.green,fontWeight:700,marginTop:10}}>
+              ✅ Semaine clôturée le {semaineDejaCloturee?.closedAt ? new Date(semaineDejaCloturee.closedAt).toLocaleDateString("fr-FR") : today}
+            </div>
           )}
         </div>
         <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Historique semaines</div>
-        {[...histSemaine].reverse().slice(0,6).map(s=><div key={s.debut} style={{background:T.surface,borderRadius:10,padding:10,marginBottom:6}}>
-          <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:700,fontSize:12}}>Sem. {s.debut}</span><span style={{color:T.green,fontWeight:800}}>{fmtPrice(s.ca)}</span></div>
-          <div style={{fontSize:10,color:T.textMute}}>{s.nb} ventes · Net: <span style={{color:s.net>=0?T.accent:T.red,fontWeight:700}}>{fmtPrice(s.net)}</span> · Clôt. {new Date(s.closedAt).toLocaleDateString("fr-FR")}</div>
-        </div>)}
+        {safeHistSemaine.length === 0 ? (
+          <div style={{background:T.surface, borderRadius:10, padding:14, textAlign:"center", color:T.textMute, fontSize:11}}>
+            Aucune clôture de semaine enregistrée
+          </div>
+        ) : (
+          [...safeHistSemaine].reverse().slice(0,6).map((s, idx)=>(
+            <div key={s.debut || idx} style={{background:T.surface,borderRadius:10,padding:10,marginBottom:6}}>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:700,fontSize:12}}>Sem. {s.debut || "—"}</span><span style={{color:T.green,fontWeight:800}}>{fmtPrice(s.ca || 0)}</span></div>
+              <div style={{fontSize:10,color:T.textMute}}>{s.nb || 0} ventes · Net: <span style={{color:(s.net||0)>=0?T.accent:T.red,fontWeight:700}}>{fmtPrice(s.net || 0)}</span> · Clôt. {s.closedAt ? new Date(s.closedAt).toLocaleDateString("fr-FR") : "—"}</div>
+            </div>
+          ))
+        )}
       </>)}
     </div>
   );
@@ -5998,17 +6192,19 @@ function MainApp({
         )}
 
         {tab === "cloture" && (
-          <SectionCloture
-            T={T}
-            shopId={shopId}
-            sales={sales}
-            depenses={depenses}
-            comptablePin={comptablePin || "0000"}
-            currentStaff={currentStaff}
-            staffList={staffList}
-            logout={logout}
-            flashMsg={flashMsg}
-          />
+          <ErrorBoundary>
+            <SectionCloture
+              T={T}
+              shopId={shopId}
+              sales={sales || []}
+              depenses={depenses || []}
+              comptablePin={comptablePin || "0000"}
+              currentStaff={currentStaff}
+              staffList={staffList || []}
+              logout={logout}
+              flashMsg={flashMsg}
+            />
+          </ErrorBoundary>
         )}
 
         {tab === "plus" && (
