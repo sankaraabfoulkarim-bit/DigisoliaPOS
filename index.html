@@ -4442,33 +4442,215 @@ class USBPrinter {
 }
 const usbPrinter = new USBPrinter();
 
+// Encodage binaire Uint8Array vers Base64 robuste (évite tout débordement de pile)
+function uint8ArrayToBase64(u8) {
+  if (!u8 || u8.length === 0) return "";
+  let binary = "";
+  const len = u8.byteLength || u8.length;
+  const chunkSize = 8192;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = u8.subarray ? u8.subarray(i, Math.min(i + chunkSize, len)) : u8.slice(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, chunk);
+  }
+  return btoa(binary);
+}
+
 class RawBTPrinter {
   constructor() {
-    this.connected = localStorage.getItem("pos_rawbt_ready") === "1";
+    this.connected = localStorage.getItem("pos_rawbt_ready") !== "0"; // Prêt par défaut si l'utilisateur choisit RawBT
     this.listeners = [];
+    this.isWsAvailable = false;
   }
   subscribe(callback) { this.listeners.push(callback); return () => { this.listeners = this.listeners.filter(l => l !== callback); }; }
   notify(data) { this.listeners.forEach(l => l(data)); }
+
+  async testWebSocket() {
+    return new Promise((resolve) => {
+      let settled = false;
+      let ws = null;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          try { if (ws) ws.close(); } catch(e) {}
+          resolve(false);
+        }
+      }, 350);
+
+      try {
+        ws = new WebSocket("ws://127.0.0.1:40213");
+        ws.onopen = () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            try { ws.close(); } catch(e) {}
+            resolve(true);
+          }
+        };
+        ws.onerror = () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            resolve(false);
+          }
+        };
+      } catch(e) {
+        clearTimeout(timer);
+        resolve(false);
+      }
+    });
+  }
+
+  openRawBTApp() {
+    // Tente d'ouvrir directement l'application RawBT sur Android pour configurer l'imprimante USB ou Bluetooth
+    const intentUrl = "intent:#Intent;action=android.intent.action.MAIN;package=ru.a402d.rawbtprinter;end;";
+    try {
+      const a = document.createElement("a");
+      a.href = intentUrl;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { try { a.remove(); } catch(e){} }, 600);
+    } catch(e) {
+      try { window.location.href = "rawbt://"; } catch(err) {}
+    }
+  }
+
   async connect() {
-    this.notify({ status: "searching", message: "Ouverture de RawBT..." });
-    try { window.location.href = "rawbt://"; } catch(e) {}
-    await new Promise(r => setTimeout(r, 300));
+    this.notify({ status: "searching", message: "Vérification de RawBT..." });
+    let wsOk = false;
+    try {
+      wsOk = await this.testWebSocket();
+      this.isWsAvailable = wsOk;
+    } catch(e) {}
+
     this.connected = true;
     localStorage.setItem("pos_rawbt_ready", "1");
-    this.notify({ status: "connected", message: "RawBT activé", name: "RawBT" });
+    this.notify({
+      status: "connected",
+      message: wsOk ? "RawBT connecté (WebSocket 127.0.0.1:40213)" : "RawBT prêt (Mode Intent Android & USB)",
+      name: "RawBT Driver (USB/BT)"
+    });
     return "RawBT";
   }
+
   disconnect() {
     this.connected = false;
-    localStorage.removeItem("pos_rawbt_ready");
+    localStorage.setItem("pos_rawbt_ready", "0");
     this.notify({ status: "disconnected", message: "RawBT désactivé" });
   }
+
+  async sendViaWebSocket(data) {
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      let ws = null;
+      const timer = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          try { if (ws) ws.close(); } catch(e) {}
+          reject(new Error("Timeout WS RawBT"));
+        }
+      }, 400);
+
+      try {
+        ws = new WebSocket("ws://127.0.0.1:40213");
+        ws.binaryType = "arraybuffer";
+        ws.onopen = () => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            try {
+              const buf = data.buffer ? data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) : data;
+              ws.send(buf);
+              setTimeout(() => {
+                try { ws.close(); } catch(e) {}
+                resolve(true);
+              }, 100);
+            } catch(err) {
+              reject(err);
+            }
+          }
+        };
+        ws.onerror = (err) => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timer);
+            reject(err || new Error("Erreur connexion WS RawBT"));
+          }
+        };
+      } catch(e) {
+        clearTimeout(timer);
+        reject(e);
+      }
+    });
+  }
+
+  triggerAndroidIntent(base64Data) {
+    // 1. Intent officiel Chrome Android ciblant le paquet de l'application RawBT (ru.a402d.rawbtprinter)
+    const intentUrl = `intent:base64,${base64Data}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
+    const schemeUrl = `rawbt:base64,${base64Data}`;
+
+    // Émettre via un lien <a> invisible cliqué (évite le blocage 'Navigation is blocked' de Chrome Android)
+    try {
+      const a = document.createElement("a");
+      a.href = intentUrl;
+      a.target = "_self";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { try { a.remove(); } catch(e){} }, 800);
+    } catch(e) {
+      try { window.location.href = intentUrl; } catch(err) {}
+    }
+
+    // Fallback 1 : schéma direct rawbt:base64
+    setTimeout(() => {
+      try {
+        const a2 = document.createElement("a");
+        a2.href = schemeUrl;
+        a2.style.display = "none";
+        document.body.appendChild(a2);
+        a2.click();
+        setTimeout(() => { try { a2.remove(); } catch(e){} }, 800);
+      } catch(e) {}
+    }, 200);
+
+    // Fallback 2 : iframe masqué pour contourner d'éventuels contextes d'iFrame ou WebView
+    setTimeout(() => {
+      try {
+        let iframe = document.getElementById("rawbt_print_frame");
+        if (!iframe) {
+          iframe = document.createElement("iframe");
+          iframe.id = "rawbt_print_frame";
+          iframe.style.display = "none";
+          document.body.appendChild(iframe);
+        }
+        iframe.src = schemeUrl;
+      } catch(e) {}
+    }, 350);
+  }
+
   async print(data) {
-    if (!this.connected) throw new Error("RawBT non activé");
-    let binary = "";
-    for (let i = 0; i < data.length; i++) binary += String.fromCharCode(data[i]);
-    const base64Data = btoa(binary);
-    window.location.href = `rawbt:base64,${base64Data}`;
+    this.connected = true;
+    localStorage.setItem("pos_rawbt_ready", "1");
+
+    // Canal 1 : Tenter WebSocket local RawBT (instantané sans quitter la page)
+    let wsSuccess = false;
+    try {
+      wsSuccess = await this.sendViaWebSocket(data);
+    } catch(e) {
+      wsSuccess = false;
+    }
+
+    if (wsSuccess) {
+      this.notify({ status: "connected", message: "Impression envoyée via RawBT (WS)", name: "RawBT (WS)" });
+      return true;
+    }
+
+    // Canal 2 : Intent Android Chrome (ouvre RawBT et imprime immédiatement sur l'imprimante USB/BT configurée)
+    const base64Data = uint8ArrayToBase64(data);
+    this.triggerAndroidIntent(base64Data);
+    this.notify({ status: "connected", message: "Ticket transmis à RawBT", name: "RawBT (Intent)" });
+    return true;
   }
 }
 const rawbtPrinter = new RawBTPrinter();
@@ -4478,7 +4660,10 @@ function activeThermalPrinter(connType) {
   if (connType === "rawbt") return rawbtPrinter;
   return printer;
 }
-function thermalConnected(connType) { return activeThermalPrinter(connType).connected; }
+function thermalConnected(connType) {
+  if (connType === "rawbt") return true; // Toujours disponible dès sélectionné
+  return activeThermalPrinter(connType).connected;
+}
 
 async function openCashDrawer(connType) {
   const cmd = new Uint8Array([0x1B, 0x70, 0x00, 0x19, 0xFA]);
@@ -4620,13 +4805,14 @@ async function printViaUSB(shopName, shopPhone, items, total, invoiceNum, ticket
 }
 
 async function printViaRawBT(shopName, shopPhone, items, total, invoiceNum, ticketFormat, shopLogo, nbCopies, ticketFooter, shopAddress, shopSlogan) {
-  if (!rawbtPrinter.connected) throw new Error("RawBT non activé");
+  rawbtPrinter.connected = true;
+  localStorage.setItem("pos_rawbt_ready", "1");
   const col = ticketFormat === "57mm" ? COL_57 : COL_80;
   const copies = Math.max(1, parseInt(nbCopies) || 1);
   const ticket = await buildESCPOSTicket(shopName, shopPhone, items, total, invoiceNum, col, shopLogo, ticketFooter, shopAddress, shopSlogan);
   for (let i = 0; i < copies; i++) {
     await rawbtPrinter.print(ticket);
-    if (i < copies - 1) await new Promise(r => setTimeout(r, 1500));
+    if (i < copies - 1) await new Promise(r => setTimeout(r, 1200));
   }
   return true;
 }
@@ -4783,13 +4969,14 @@ async function printCommandeViaUSB(shopName, shopPhone, shopAddress, shopSlogan,
 }
 
 async function printCommandeViaRawBT(shopName, shopPhone, shopAddress, shopSlogan, shopLogo, commande, ticketFormat, nbCopies, ticketFooter) {
-  if (!rawbtPrinter.connected) throw new Error("RawBT non activé");
+  rawbtPrinter.connected = true;
+  localStorage.setItem("pos_rawbt_ready", "1");
   const col = ticketFormat === "57mm" ? COL_57 : COL_80;
   const copies = Math.max(1, parseInt(nbCopies) || 1);
   const ticket = await buildCommandeESCPOS(shopName, shopPhone, shopAddress, shopSlogan, shopLogo, commande, col, ticketFooter);
   for (let i = 0; i < copies; i++) {
     await rawbtPrinter.print(ticket);
-    if (i < copies - 1) await new Promise(r => setTimeout(r, 1500));
+    if (i < copies - 1) await new Promise(r => setTimeout(r, 1200));
   }
   return true;
 }
@@ -4937,11 +5124,16 @@ function BLEStatus({ T, connType = "ble", setConnType }) {
   const [status, setStatus] = useState({ status: "disconnected", message: "Hors ligne" });
   const [connecting, setConnecting] = useState(false);
   const [testPrinting, setTestPrinting] = useState(false);
+  const [showUsbHelp, setShowUsbHelp] = useState(false);
   const activePrinter = activeThermalPrinter(connType);
 
   useEffect(() => {
     const unsub = activePrinter.subscribe(setStatus);
-    setStatus(activePrinter.connected ? { status: "connected", message: "Connecté", name: activePrinter.device?.name || activePrinter.device?.productName || (connType==="rawbt" ? "RawBT" : undefined) } : { status: "disconnected", message: "Hors ligne" });
+    if (connType === "rawbt") {
+      setStatus({ status: "connected", message: "RawBT prêt (USB & Bluetooth)", name: "RawBT Service" });
+    } else {
+      setStatus(activePrinter.connected ? { status: "connected", message: "Connecté", name: activePrinter.device?.name || activePrinter.device?.productName } : { status: "disconnected", message: "Hors ligne" });
+    }
     return unsub;
   }, [connType]);
 
@@ -4958,55 +5150,222 @@ function BLEStatus({ T, connType = "ble", setConnType }) {
   const disconnect = () => activePrinter.disconnect();
 
   const testPrint = async () => {
-    if (!activePrinter.connected) { alert("Connectez d'abord l'imprimante"); return; }
     setTestPrinting(true);
     try {
-      const testItems = [{ label: "TEST IMPRESSION THERMIQUE", amount: 500, qty: 1 }, { label: `ESC/POS ${connTypeLabel(connType)} - Impression OK`, amount: 250, qty: 2 }];
-      await printViaThermal(connType, "TEST CAISSE PRO", "", testItems, 1000, Date.now(), "80mm", null, 1, "Test impression OK");
-      alert("✅ Impression test envoyée avec succès !");
-    } catch(e) { alert("❌ Erreur: " + e.message); }
+      const testItems = [
+        { label: "SAIXIANG SX-86V (80mm)", amount: 1500, qty: 1 },
+        { label: `TEST CONNEXION ${connTypeLabel(connType)}`, amount: 500, qty: 1 }
+      ];
+      await printViaThermal(connType, "TEST IMPRESSION CAISSE", "+243 00 000 0000", testItems, 2000, "TEST-" + Date.now().toString().slice(-4), "80mm", null, 1, "Connexion Imprimante USB Réussie !\n--- Digitale Solution POS ---");
+      alert("✅ Impression test envoyée à l'imprimante !");
+    } catch(e) {
+      alert("❌ Erreur d'impression : " + e.message);
+    }
     setTestPrinting(false);
   };
 
-  const isConnected = status.status === "connected";
+  const isConnected = connType === "rawbt" ? true : status.status === "connected";
   const color = isConnected ? T.green : (status.status === "searching" || status.status === "reconnecting" ? T.blue : T.red);
   const icon = isConnected ? "🖨️" : (status.status === "searching" || status.status === "reconnecting" ? "⏳" : "❌");
 
   return (
-    <div style={{ background: T.surface, borderRadius: 12, padding: 10, marginBottom: 12, border: `1px solid ${color}` }}>
+    <div style={{ background: T.surface, borderRadius: 14, padding: 12, marginBottom: 14, border: `1.5px solid ${color}66` }}>
+      {/* Sélecteur de méthode de connexion */}
       {setConnType && (
-        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-          <button onClick={()=>setConnType("ble")} style={{ flex: 1, background: connType==="ble"?T.accent:T.surface2, border: "none", borderRadius: 8, padding: 6, fontSize: 11, fontWeight: 600, color: connType==="ble"?T.bg:T.textMute }}>📶 Bluetooth</button>
-          <button onClick={()=>setConnType("usb")} style={{ flex: 1, background: connType==="usb"?T.accent:T.surface2, border: "none", borderRadius: 8, padding: 6, fontSize: 11, fontWeight: 600, color: connType==="usb"?T.bg:T.textMute }}>🔌 USB (câble)</button>
-          <button onClick={()=>setConnType("rawbt")} style={{ flex: 1, background: connType==="rawbt"?T.accent:T.surface2, border: "none", borderRadius: 8, padding: 6, fontSize: 11, fontWeight: 600, color: connType==="rawbt"?T.bg:T.textMute }}>🖨️ RawBT</button>
+        <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+          <button
+            onClick={() => setConnType("rawbt")}
+            style={{
+              flex: 1,
+              background: connType === "rawbt" ? T.accent : T.surface2,
+              border: `1.5px solid ${connType === "rawbt" ? T.accent : T.border}`,
+              borderRadius: 8,
+              padding: "8px 6px",
+              fontSize: 11,
+              fontWeight: 700,
+              color: connType === "rawbt" ? T.bg : T.text
+            }}
+          >
+            🖨️ RawBT (USB & BT)
+          </button>
+          <button
+            onClick={() => setConnType("usb")}
+            style={{
+              flex: 1,
+              background: connType === "usb" ? T.accent : T.surface2,
+              border: `1.5px solid ${connType === "usb" ? T.accent : T.border}`,
+              borderRadius: 8,
+              padding: "8px 6px",
+              fontSize: 11,
+              fontWeight: 700,
+              color: connType === "usb" ? T.bg : T.text
+            }}
+          >
+            🔌 Câble USB direct
+          </button>
+          <button
+            onClick={() => setConnType("ble")}
+            style={{
+              flex: 1,
+              background: connType === "ble" ? T.accent : T.surface2,
+              border: `1.5px solid ${connType === "ble" ? T.accent : T.border}`,
+              borderRadius: 8,
+              padding: "8px 6px",
+              fontSize: 11,
+              fontWeight: 700,
+              color: connType === "ble" ? T.bg : T.text
+            }}
+          >
+            📶 Bluetooth
+          </button>
         </div>
       )}
-      {connType === "rawbt" && (
-        <div style={{ fontSize: 9, color: T.textMute, marginBottom: 8, lineHeight: 1.4 }}>
-          ℹ️ Nécessite l'appli <b>RawBT</b> installée sur le téléphone, avec l'imprimante déjà appairée (Bluetooth ou USB) dans ses réglages.
-        </div>
-      )}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+
+      {/* En-tête Statut */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontSize: 24 }}>{icon}</span>
+          <span style={{ fontSize: 26 }}>{icon}</span>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 600, color }}>{isConnected ? `Imprimante ${connTypeLabel(connType)} connectée` : (status.status === "searching" ? "Recherche..." : status.status === "reconnecting" ? "Reconnexion..." : "Hors ligne")}</div>
-            {status.name && <div style={{ fontSize: 10, color: T.textMute }}>{status.name}</div>}
-            {status.message && !isConnected && <div style={{ fontSize: 9, color: T.textMute }}>{status.message}</div>}
+            <div style={{ fontSize: 13, fontWeight: 800, color }}>
+              {connType === "rawbt"
+                ? "🖨️ RawBT prêt pour impression USB & Bluetooth"
+                : isConnected
+                ? `Imprimante ${connTypeLabel(connType)} connectée`
+                : (status.status === "searching" ? "Recherche de l'imprimante..." : "Imprimante non connectée")}
+            </div>
+            <div style={{ fontSize: 11, color: T.textMute, marginTop: 2 }}>
+              {connType === "rawbt"
+                ? "Compatible imprimante USB (SAIXIANG SX-86V) & Bluetooth"
+                : (status.name || status.message || "Prêt")}
+            </div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: 6 }}>
-          {!isConnected ? (
-            <button onClick={connect} disabled={connecting} style={{ background: T.btnGreen.bg, border:`1px solid ${T.border}`, borderRadius: 8, padding: "6px 12px", fontSize: 11, color: T.green, fontWeight: 600 }}>{connecting ? "..." : (connType==="rawbt" ? "✅ Activer RawBT" : "🔌 Connecter")}</button>
-          ) : (
-            <>
-              <button onClick={testPrint} disabled={testPrinting} style={{ background: T.btnBlue.bg, border:`1px solid ${T.border}`, borderRadius: 8, padding: "4px 10px", fontSize: 10, color: T.blue }}>{testPrinting ? "..." : "🖨️ Test"}</button>
-              <button onClick={disconnect} style={{ background: T.btnRed.bg, border:`1px solid ${T.red}44`, borderRadius: 8, padding: "4px 10px", fontSize: 10, color: T.red }}>Déco</button>
-            </>
+
+        {/* Boutons d'action */}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {connType === "rawbt" && (
+            <button
+              onClick={() => rawbtPrinter.openRawBTApp()}
+              title="Ouvrir l'application RawBT sur Android"
+              style={{
+                background: T.surface2,
+                border: `1px solid ${T.border}`,
+                borderRadius: 8,
+                padding: "6px 10px",
+                fontSize: 11,
+                fontWeight: 700,
+                color: T.accent,
+                cursor: "pointer"
+              }}
+            >
+              📲 Ouvrir RawBT
+            </button>
+          )}
+
+          {connType !== "rawbt" && !isConnected ? (
+            <button
+              onClick={connect}
+              disabled={connecting}
+              style={{
+                background: T.btnGreen.bg,
+                border: `1px solid ${T.green}`,
+                borderRadius: 8,
+                padding: "6px 14px",
+                fontSize: 11,
+                color: T.green,
+                fontWeight: 800,
+                cursor: "pointer"
+              }}
+            >
+              {connecting ? "⏳ Connexion..." : "🔌 Connecter USB"}
+            </button>
+          ) : null}
+
+          <button
+            onClick={testPrint}
+            disabled={testPrinting}
+            style={{
+              background: T.btnBlue.bg,
+              border: `1px solid ${T.blue}66`,
+              borderRadius: 8,
+              padding: "6px 12px",
+              fontSize: 11,
+              fontWeight: 800,
+              color: T.blue,
+              cursor: "pointer"
+            }}
+          >
+            {testPrinting ? "⏳ Impression..." : "🖨️ Test 80mm"}
+          </button>
+
+          {connType !== "rawbt" && isConnected && (
+            <button
+              onClick={disconnect}
+              style={{
+                background: T.btnRed.bg,
+                border: `1px solid ${T.red}44`,
+                borderRadius: 8,
+                padding: "6px 10px",
+                fontSize: 11,
+                color: T.red,
+                fontWeight: 700,
+                cursor: "pointer"
+              }}
+            >
+              Déconnecter
+            </button>
           )}
         </div>
       </div>
-      {isConnected && <div style={{ fontSize: 9, color: T.textMute, marginTop: 6, textAlign: "center" }}>✅ ESC/POS — Formats 80mm & 57mm disponibles{connType==="usb"?" · Imprimante branchée par câble USB":""}{connType==="rawbt"?" · Impression via l'appli RawBT":""}</div>}
+
+      {/* Guide d'aide pour imprimante USB (SAIXIANG SX-86V) */}
+      <div style={{ background: T.surface2, borderRadius: 10, padding: "8px 10px", marginTop: 8, fontSize: 11, lineHeight: 1.5 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <strong style={{ color: T.accent }}>
+            💡 Guide connexion USB pour imprimante SAIXIANG SX-86V (80mm) :
+          </strong>
+          <button
+            onClick={() => setShowUsbHelp(!showUsbHelp)}
+            style={{ background: "transparent", border: "none", color: T.accent, fontSize: 10, cursor: "pointer", fontWeight: 700 }}
+          >
+            {showUsbHelp ? "▲ Masquer" : "▼ Afficher les étapes"}
+          </button>
+        </div>
+
+        {showUsbHelp && (
+          <div style={{ marginTop: 6, color: T.text, borderTop: `1px solid ${T.border}`, paddingTop: 6 }}>
+            <div style={{ marginBottom: 4 }}>
+              <strong>1. Câblage :</strong> Reliez le câble USB de l'imprimante au téléphone/tablette avec l'adaptateur USB-OTG (ou directement au PC). Allumez l'imprimante.
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <strong>2. Configuration dans RawBT :</strong>
+              <div style={{ paddingLeft: 10, color: T.textMute }}>
+                • Ouvrez <b>RawBT</b> sur votre téléphone (cliquez sur <i>📲 Ouvrir RawBT</i> ci-dessus)<br />
+                • Allez dans <b>Paramètres ⚙️ &gt; Imprimante</b><br />
+                • Méthode de connexion : choisissez <b>USB</b><br />
+                • Sélectionnez <b>SX-86V / Imprimante USB</b> et cochez <i>"Toujours autoriser"</i><br />
+                • Modèle : <b>ESC/POS</b>, Largeur papier : <b>80mm</b>
+              </div>
+            </div>
+            <div style={{ marginBottom: 4 }}>
+              <strong>3. Option WebSocket (très rapide) :</strong>
+              <div style={{ paddingLeft: 10, color: T.textMute }}>
+                • Dans RawBT &gt; Paramètres, activez <i>"Serveur Web / WebSocket"</i> (port 40213). Cela permet l'impression instantanée sans quitter l'écran de caisse !
+              </div>
+            </div>
+            <div>
+              <strong>4. Alternative Câble USB Direct (sans RawBT) :</strong>
+              <div style={{ paddingLeft: 10, color: T.textMute }}>
+                • Cliquez sur l'onglet <b>🔌 Câble USB direct</b> ci-dessus, puis sur <b>🔌 Connecter USB</b> pour imprimer directement via Chrome.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ fontSize: 10, color: T.textMute, marginTop: 8, textAlign: "center" }}>
+        ✅ Prise en charge automatique : Impression thermique 80mm &amp; 57mm · Massicot cutter auto · Sortie tiroir-caisse 24V
+      </div>
     </div>
   );
 }
@@ -5763,6 +6122,33 @@ function MainApp({
           {/* BOUTON INSTALLATION PWA */}
           <PWAInstallHeaderButton T={T} flashMsg={flashMsg} />
 
+          {/* BOUTON ACCÈS RAPIDE IMPRIMANTE */}
+          <button
+            onClick={() => {
+              setTab("plus");
+              setPlusSubTab("imprimante");
+            }}
+            title={`Réglages Imprimante (${connTypeLabel(connType)})`}
+            aria-label="Configuration et test de l'imprimante thermique"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              background: connType === "rawbt" ? "rgba(34,197,94,0.12)" : T.surface2,
+              border: `1.5px solid ${connType === "rawbt" ? T.green : T.border}`,
+              borderRadius: 8,
+              padding: "5px 8px",
+              fontSize: 11,
+              fontWeight: 700,
+              color: connType === "rawbt" ? T.green : T.text,
+              cursor: "pointer",
+              whiteSpace: "nowrap"
+            }}
+          >
+            <span>🖨️</span>
+            <span>{connType === "rawbt" ? "RawBT" : connType === "usb" ? "USB" : "BLE"}</span>
+          </button>
+
           <div className="hdr-themes theme-toggle" style={{ background:T.surface2 }}>
             <button className={`theme-btn${themeName==="auto"?" active":""}`} onClick={()=>setThemeName("auto")}>⚙️</button>
             <button className={`theme-btn${themeName==="light"?" active":""}`} onClick={()=>setThemeName("light")}>☀️</button>
@@ -5965,11 +6351,29 @@ function MainApp({
 
                   {!s.cancelled && (
                     <div style={{ display:"flex", gap:6, marginTop:8, borderTop:`1px solid ${T.border}`, paddingTop:6 }}>
+                      <button
+                        onClick={async () => {
+                          try {
+                            if (thermalConnected(connType)) {
+                              await printViaThermal(connType, shopName, shopPhone, s.items, s.total, s.id, ticketFormat, shopLogo, ticketCopies, ticketFooter, shopAddress, shopSlogan);
+                              flashMsg("✅ Ticket thermique envoyé à l'imprimante");
+                            } else {
+                              printFallback(shopName, shopPhone, s.items, s.total, s.id, ticketFormat, shopLogo, ticketCopies, ticketFooter, shopAddress, shopSlogan);
+                            }
+                          } catch(err) {
+                            flashMsg("⚠️ Erreur réimpression : " + err.message);
+                          }
+                        }}
+                        title="Imprimer le ticket sur l'imprimante thermique (RawBT ou USB)"
+                        style={{ flex:1, background:T.surface2, border:`1px solid ${T.accent}44`, borderRadius:6, padding:"4px 8px", fontSize:10, color:T.accent, fontWeight:700 }}
+                      >
+                        🖨️ Ticket
+                      </button>
                       <button onClick={()=>shareTicketWhatsApp(shopName, s)} style={{ flex:1, background:T.surface2, border:"none", borderRadius:6, padding:"4px 8px", fontSize:10, color:T.green, fontWeight:600 }}>
                         📲 WhatsApp
                       </button>
                       <button onClick={()=>generateTicketPDF(shopName, shopPhone, s, shopLogo)} style={{ flex:1, background:T.surface2, border:"none", borderRadius:6, padding:"4px 8px", fontSize:10, color:T.blue }}>
-                        🖨️ PDF
+                        📄 PDF
                       </button>
                       <button onClick={()=>cancelSale(s)} style={{ background:T.btnRed.bg, border:"none", borderRadius:6, padding:"4px 8px", fontSize:10, color:T.red }}>
                         Annuler
