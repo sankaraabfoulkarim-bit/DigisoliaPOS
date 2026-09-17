@@ -1,0 +1,6 @@
+{
+  "name": "Caisse SaaS Pro",
+  "description": "Caisse enregistreuse SaaS avec contrôle d'accès par rôles (Caissière, Gérant, Propriétaire), synchronisation Cloud et locale, et administration développeur.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
